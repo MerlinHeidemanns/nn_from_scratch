@@ -1,5 +1,4 @@
 import numpy as np
-from matplotlib import pyplot as plt
 
 class Module():
 
@@ -28,53 +27,14 @@ class InputLayer(Module):
         self.d = d
         self.h = None
 
-class HiddenLayerSigmoid(Module):
-
-    def __init__(self, d, alpha):
-        super().__init__()
-        self.d = d
-        self.h = None
-        self.b = None
-        self.w = None
-        self.alpha = alpha
-
-    def sigmoid(self, x):
-        return 1 / (1 + np.exp(-x))
-
-    def gsigmoid(self, x):
-        return self.sigmoid(x) * (1 - self.sigmoid(x))
-
-    def compute_h(self):
-        vsigmoid = np.vectorize(self.sigmoid)
-        self.h = vsigmoid(self.a)
-
-    def compute_a(self):
-        self.a = np.add(self.b, np.matmul(self.w, self.prev.h))
-
-    def forward(self):
-        self.n = self.prev.h.shape[1]
-        self.compute_a()
-        self.compute_h()
-
-    def backprop(self):
-        self.delta          = np.multiply(self.gsigmoid(self.a), self.next.gradient)
-        self.gradient       = np.matmul(np.transpose(self.w), self.delta)
-        self.update_bias    = 1/self.n * self.delta
-        self.update_weights = 1/self.n * np.matmul(self.delta, np.transpose(self.prev.h))
-
-    def update(self):
-        self.b = np.subtract(self.b, self.alpha * self.update_bias)
-        self.w = np.subtract(self.w, self.alpha * self.update_weights)
-
 class HiddenLayer(Module):
 
-    def __init__(self, d, alpha):
+    def __init__(self, d):
         super().__init__()
         self.d = d
         self.h = None
         self.b = None
         self.w = None
-        self.alpha = alpha
         self.delta = None
         self.update_bias = None
         self.update_weights = None
@@ -85,11 +45,28 @@ class HiddenLayer(Module):
     def compute_h(self):
         self.h = self.a
 
-    def update(self):
+    def update(self, optimizer, regularizer = None, alpha = 0.5, epsilon = None):
         self.update_bias    = 1/self.n * np.sum(self.delta, axis = 1, keepdims=True)
         self.update_weights = 1/self.n * np.matmul(self.delta, np.transpose(self.prev.h))
-        self.b = np.subtract(self.b, self.alpha * self.update_bias)
-        self.w = np.subtract(self.w, self.alpha * self.update_weights)
+        if optimizer == "sgd":
+            self.update_sgd()
+        elif optimizer == "adam":
+            self.update_adam()
+        if regularizer == "L2":
+            self.regularize_update_L2(alpha = alpha, epsilon = epsilon)
+        else:
+            # if no regularization multiply by alpha only
+            self.update_weights = alpha * self.update_weights
+        #print(np.sum(abs(self.update_bias)))
+        #print(np.sum(abs(self.update_weights)))
+        self.b = np.subtract(self.b, alpha * self.update_bias)
+        self.w = np.subtract(self.w, self.update_weights)
+
+    def regularize_update_L2(self, alpha, epsilon):
+        self.update_weights = epsilon * (alpha * self.w + self.update_weights)
+
+    def update_sgd(self):
+        pass
 
     def update_adam(self, t, rho1, rho2):
         self.update_bias    = 1/self.n * np.sum(self.delta, axis = 1, keepdims=True)
@@ -107,8 +84,9 @@ class HiddenLayer(Module):
         s_b_bar  = np.divide(self.s_b, (1 - pow(rho1, t)))
         r_w_bar  = np.divide(self.r_w, (1 - pow(rho1, t)))
         r_b_bar  = np.divide(self.r_b, (1 - pow(rho1, t)))
-        self.w = np.subtract(self.w, self.alpha * np.divide(s_w_bar, np.add(np.sqrt(r_w_bar), 0.001)))
-        self.b = np.subtract(self.b, self.alpha * np.divide(s_b_bar, np.add(np.sqrt(r_b_bar), 0.001)))
+        self.update_weights = np.divide(s_w_bar, np.add(np.sqrt(r_w_bar), 0.001))
+        self.update_bias    = np.divide(s_b_bar, np.add(np.sqrt(r_b_bar), 0.001))
+
 
     def forward(self):
         self.n = self.prev.h.shape[1]
@@ -117,8 +95,8 @@ class HiddenLayer(Module):
 
 class HiddenLayerLinear(HiddenLayer):
 
-    def __init__(self, d, alpha):
-        super().__init__(d = d, alpha = alpha)
+    def __init__(self, d):
+        super().__init__(d = d)
 
     def backprop(self):
         self.delta    = self.next.gradient
@@ -126,8 +104,8 @@ class HiddenLayerLinear(HiddenLayer):
 
 class HiddenLayerSigmoid(HiddenLayer):
 
-    def __init__(self, d, alpha):
-        super().__init__(d = d, alpha = alpha)
+    def __init__(self, d):
+        super().__init__(d = d)
 
     def sigmoid(self, x):
         return 1 / (1 + np.exp(-x))
@@ -182,8 +160,8 @@ class Network():
         elif layer is None:
             layer = self.input_layer.next
         else:
-            layer.w = np.random.uniform(low = -0.1, high = 0.1, size = (layer.d, layer.k))
-            layer.b = np.random.uniform(low = -0.1, high = 0.1, size = (layer.d, 1))
+            layer.w = np.random.uniform(low = -0.2, high = 0.2, size = (layer.d, layer.k))
+            layer.b = np.random.uniform(low = -0.2, high = 0.2, size = (layer.d, 1))
             layer = layer.next
         self.initialize(layer = layer)
 
@@ -205,7 +183,6 @@ class Network():
     def forward(self, layer = None):
         if isinstance(layer, LossLayer):
             layer.forward()
-            print(layer.prev.h)
             return None
         elif layer is None:
             layer = self.input_layer
@@ -214,15 +191,15 @@ class Network():
             layer = layer.next
         self.forward(layer = layer)
 
-    def update(self, t = None,layer = None):
+    def update(self,layer = None):
         if isinstance(layer, LossLayer):
             return None
         elif layer is None:
             layer = self.input_layer.next
         else:
-            layer.update_adam(t = t, rho1 = 0.99, rho2 = 0.999)
+            layer.update(optimizer = self.optimizer)
             layer = layer.next
-        self.update(t = t, layer = layer)
+        self.update(layer = layer)
 
     def backprop(self, layer = None):
         if layer is None:
@@ -256,8 +233,37 @@ class Network():
         self.forward()
         return self.top_layer.loss
 
-    def training(self, X, y, epochs, minibatch, validation):
+    def set_optimizer(self, optimizer):
+        if optimizer is None:
+            pass
+        else:
+            options = ["sgd", "adam"]
+            if optimizer in options:
+                self.optimizer = optimizer
+            else:
+                print("This optimizer either does not exist or hasn't been implemented yet. Please choose one of:\n")
+                for i in options:
+                    print(i, "\n")
+                raise NotImplementedError("")
+
+    def set_regularizer(self, regularizer):
+        if regularizer is None:
+            pass
+        else:
+            options = ["L2"]
+            if regularizer in options:
+                self.regularizer = regularizer
+            else:
+                print("This regularizer either does not exist or hasn't been implemented yet. Please choose one of:\n")
+                for i in options:
+                    print(i, "\n")
+                raise NotImplementedError("")
+
+
+    def training(self, X, y, epochs, minibatch, validation, optimizer = "sgd", regularizer = None, alpha = None, epsilon = None):
         X_train, y_train, X_test, y_test = self._train_test_split(X = X, y = y, validation = validation)
+        self.set_optimizer(optimizer=optimizer)
+        self.set_regularizer(regularizer=regularizer)
         self.initialize()
         for i in range(epochs):
             print("Starting epoch ", i + 1)
@@ -271,7 +277,7 @@ class Network():
                 self.set_data(X[start:end], y[start:end])
                 self.forward()
                 self.backprop()
-                self.update(t = j + 1)
+                self.update()
             print("Loss on test set:", self._return_loss(X_test, y_test))
 
     def predict(self, X):
@@ -279,24 +285,5 @@ class Network():
         self.forward()
         return self.top_layer.prev.h
 
-if __name__ == "__main__":
-    K = 1
-    N = 300
-    X = np.random.uniform(-10, 10, size = (N, K))
-    b = np.ones(shape=(1,1))
-    y = np.sign(np.matmul(X, b) + 3)
-    plt.scatter(X, y)
-    plt.show()
-    network = Network()
-    network.set_input_layer(K)
-    network.add_layer(HiddenLayerSigmoid(256, 0.01))
-    network.add_layer(HiddenLayerSigmoid(32, 0.01))
-    network.add_layer(HiddenLayerSigmoid(1, 0.01))
-    network.add_layer(MSELossLayer())
-    network.training(X = X, y = y, epochs = 100,minibatch = 25, validation = 0.1)
-    x_test = np.arange(-10, 10, 0.1).reshape(200, 1)
-    y_hat = network.predict(X = x_test)
-    plt.plot(x_test, np.where(np.transpose(y_hat) > 0.5, 1, 0))
-    plt.show()
 
 # python3 feedforward_neuralnet.py

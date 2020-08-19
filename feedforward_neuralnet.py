@@ -11,8 +11,8 @@ class Module():
             other.k = self.d
             self.next = other
             other.prev = self
-        else:
-            self.output = other
+        #else:
+        #    self.output = other
 
     def forward(self):
         pass
@@ -29,7 +29,7 @@ class InputLayer(Module):
 
 class HiddenLayer(Module):
 
-    def __init__(self, d):
+    def __init__(self, d, activation):
         super().__init__()
         self.d = d
         self.h = None
@@ -38,60 +38,91 @@ class HiddenLayer(Module):
         self.delta = None
         self.update_bias = None
         self.update_weights = None
+        self.activation = activation
+
+    def sigmoid(self, x):
+        return 1 / (1 + np.exp(-x))
+
+    def gsigmoid(self, x):
+        return self.sigmoid(x) * (1 - self.sigmoid(x))
+
+    def relu(self, x):
+        return max([0, x])
+
+    def grelu(self, x):
+        return np.where(x > 0, 1, 0)
 
     def compute_a(self):
         self.a = np.add(self.b, np.matmul(self.w, self.prev.h))
 
     def compute_h(self):
-        self.h = self.a
-
-    def update(self, optimizer, regularizer = None, alpha = 0.5, epsilon = None):
-        self.update_bias    = 1/self.n * np.sum(self.delta, axis = 1, keepdims=True)
-        self.update_weights = 1/self.n * np.matmul(self.delta, np.transpose(self.prev.h))
-        if optimizer == "sgd":
-            self.update_sgd()
-        elif optimizer == "adam":
-            self.update_adam()
-        if regularizer == "L2":
-            self.regularize_update_L2(alpha = alpha, epsilon = epsilon)
-        else:
-            # if no regularization multiply by alpha only
-            self.update_weights = alpha * self.update_weights
-        #print(np.sum(abs(self.update_bias)))
-        #print(np.sum(abs(self.update_weights)))
-        self.b = np.subtract(self.b, alpha * self.update_bias)
-        self.w = np.subtract(self.w, self.update_weights)
-
-    def regularize_update_L2(self, alpha, epsilon):
-        self.update_weights = epsilon * (alpha * self.w + self.update_weights)
-
-    def update_sgd(self):
-        pass
-
-    def update_adam(self, t, rho1, rho2):
-        self.update_bias    = 1/self.n * np.sum(self.delta, axis = 1, keepdims=True)
-        self.update_weights = 1/self.n * np.matmul(self.delta, np.transpose(self.prev.h))
-        if t == 1:
-            self.s_w = np.zeros(shape = self.w.shape)
-            self.s_b = np.zeros(shape = self.b.shape)
-            self.r_w = np.zeros(shape = self.w.shape)
-            self.r_b = np.zeros(shape = self.b.shape)
-        self.s_w = np.add(rho1 * self.s_w, np.multiply(1 - rho1, self.update_weights))
-        self.s_b = np.add(rho1 * self.s_b, np.multiply(1 - rho1, self.update_bias))
-        self.r_w = np.add(rho2 * self.r_w, np.multiply(1 - rho2, np.square(self.update_weights)))
-        self.r_b = np.add(rho2 * self.r_b, np.multiply(1 - rho2, np.square(self.update_bias)))
-        s_w_bar  = np.divide(self.s_w, (1 - pow(rho1, t)))
-        s_b_bar  = np.divide(self.s_b, (1 - pow(rho1, t)))
-        r_w_bar  = np.divide(self.r_w, (1 - pow(rho1, t)))
-        r_b_bar  = np.divide(self.r_b, (1 - pow(rho1, t)))
-        self.update_weights = np.divide(s_w_bar, np.add(np.sqrt(r_w_bar), 0.001))
-        self.update_bias    = np.divide(s_b_bar, np.add(np.sqrt(r_b_bar), 0.001))
-
+        if self.activation == "linear":
+            self.h = self.a
+        elif self.activation == "ReLU":
+            vrelu = np.vectorize(self.relu)
+            self.h = vrelu(self.a)
+        elif self.activation == "sigmoid":
+            vsigmoid = np.vectorize(self.sigmoid)
+            self.h = vsigmoid(self.a)
 
     def forward(self):
         self.n = self.prev.h.shape[1]
         self.compute_a()
         self.compute_h()
+
+    def backprop(self):
+        if self.activation == "linear":
+            self.delta = self.next.gradient
+        elif self.activation == "ReLU":
+            self.delta = np.multiply(self.grelu(self.a), self.next.gradient)
+        elif self.activation == "sigmoid":
+            self.delta = np.multiply(self.gsigmoid(self.a), self.next.gradient)
+        self.gradient = np.matmul(np.transpose(self.w), self.delta)
+
+    def update(self, optimizer, regularizer = None, epsilon = 0.5, epsilon = None, rho1 = 0.9, rho2 = 0.99):
+        try:
+            self.t
+        except:
+            self.t = 0
+        self.t += 1
+        self.update_bias    = 1/self.n * np.sum(self.delta, axis = 1, keepdims=True)
+        self.update_weights = 1/self.n * np.matmul(self.delta, np.transpose(self.prev.h))
+        if optimizer == "sgd":
+            self.update_sgd()
+        elif optimizer == "adam":
+            self.update_adam(t = self.t, rho1 = rho1, rho2 = rho2)
+        if regularizer == "L2":
+            self.regularize_update_L2(epsilon = epsilon, epsilon = epsilon)
+        else:
+            self.update_weights = epsilon * self.update_weights
+        self.b = np.subtract(self.b, epsilon * self.update_bias)
+        self.w = np.subtract(self.w, self.update_weights)
+
+    def regularize_update_L2(self, epsilon, epsilon):
+        self.update_weights = epsilon * np.add(epsilon * self.w, self.update_weights)
+
+    def update_sgd(self):
+        pass
+
+    def update_momentum(self, epsilon, epsilon):
+        try:
+            self.velocity
+        except:
+            self.velocity = np.zeros(shape=self.w.shape)
+            self.velocity = epsilon * self.velocity - epsilon * self.update_weights
+            self.update_weights = - self.velocity
+
+    def update_adam(self, t, rho1, rho2):
+        if t == 1:
+            self.s_w = np.zeros(shape = self.w.shape)
+            self.r_w = np.zeros(shape = self.w.shape)
+        self.s_w = np.add(rho1 * self.s_w, np.multiply(1 - rho1, self.update_weights))
+        self.r_w = np.add(rho2 * self.r_w, np.multiply(1 - rho2, np.square(self.update_weights)))
+        s_w_bar  = np.divide(self.s_w, (1 - pow(rho1, t)))
+        r_w_bar  = np.divide(self.r_w, (1 - pow(rho2, t)))
+        self.update_weights = np.divide(s_w_bar, np.add(np.sqrt(r_w_bar), 0.001))
+
+
 
 class HiddenLayerLinear(HiddenLayer):
 
@@ -121,6 +152,25 @@ class HiddenLayerSigmoid(HiddenLayer):
         self.delta          = np.multiply(self.gsigmoid(self.a), self.next.gradient)
         self.gradient       = np.matmul(np.transpose(self.w), self.delta)
 
+class HiddenLayerReLU(HiddenLayer):
+
+    def __init__(self, d):
+        super().__init__(d = d)
+
+    def relu(self, x):
+        return max([0, x])
+
+    def grelu(self, x):
+        return np.where(x > 0, 1, 0)
+
+    def compute_h(self):
+        vrelu = np.vectorize(self.relu)
+        self.h = vrelu(self.a)
+
+    def backprop(self):
+        self.delta     = np.multiply(self.grelu(self.a), self.next.gradient)
+        self.gradient = np.matmul(np.transpose(self.w), self.delta)
+
 class LossLayer(Module):
 
     def __init__(self):
@@ -143,6 +193,21 @@ class MSELossLayer(LossLayer):
 
     def backprop(self):
         self.gradient = np.subtract(self.prev.h, self.y)
+
+
+class CELossLayer(LossLayer):
+
+    def __init__(self):
+        pass
+
+    def forward(self):
+        # mean(y != y_hat
+        #print(np.column_stack((np.transpose(self.prev.h), np.transpose(self.y))))
+        self.loss = np.mean(np.where(self.prev.h > 0.5, 1, 0) != self.y)
+
+    def backprop(self):
+        self.gradient = np.subtract(self.prev.h, self.y)
+
 
 class Network():
 
@@ -197,9 +262,13 @@ class Network():
         elif layer is None:
             layer = self.input_layer.next
         else:
-            layer.update(optimizer = self.optimizer)
+            layer.update(optimizer = self.optimizer, regularizer = self.regularizer,
+                         epsilon = self.epsilon, epsilon = self.epsilon, rho1 =self.rho1, rho2 = self.rho2)
             layer = layer.next
         self.update(layer = layer)
+
+    #def backprop(self, ):
+    #    layer.next
 
     def backprop(self, layer = None):
         if layer is None:
@@ -235,7 +304,7 @@ class Network():
 
     def set_optimizer(self, optimizer):
         if optimizer is None:
-            pass
+            self.optimizer = None
         else:
             options = ["sgd", "adam"]
             if optimizer in options:
@@ -248,7 +317,7 @@ class Network():
 
     def set_regularizer(self, regularizer):
         if regularizer is None:
-            pass
+            self.regularizer = None
         else:
             options = ["L2"]
             if regularizer in options:
@@ -259,15 +328,40 @@ class Network():
                     print(i, "\n")
                 raise NotImplementedError("")
 
+    def set_epsilon_adapt(self, adaptation, epsilon_delta):
+        options = ["decay"]
+        if adaptation in options:
+            self.adaptation = adaptation
+            self.epsilon_delta = epsilon_delta
+        else:
+            self.adaptation = None
 
-    def training(self, X, y, epochs, minibatch, validation, optimizer = "sgd", regularizer = None, alpha = None, epsilon = None):
+    def adjust_epsilon(self, t):
+        if self.adaptation is "decay":
+            self.epsilon *= epsilon
+        elif self.adaptation is "linear":
+            self.epsilon = (1 - epsilon) +
+        elif self.adaptation is None:
+            pass
+
+    def training(self, X, y, epochs, minibatch,
+                 validation,
+                 optimizer = "sgd", regularizer = None, adaptation = None, epsilon_delta = 0.99,
+                 epsilon = 1, epsilon = 0.5,
+                 rho1 = 0.9, rho2 = 0.99):
         X_train, y_train, X_test, y_test = self._train_test_split(X = X, y = y, validation = validation)
         self.set_optimizer(optimizer=optimizer)
         self.set_regularizer(regularizer=regularizer)
+        self.set_epsilon_adapt(adaptation, epsilon_delta)
+        self.epsilon = epsilon
+        self.rho1 = rho1
+        self.rho2 = rho2
         self.initialize()
+        self.training_loss = []
+        self.test_loss     = []
+        p = np.random.permutation(X_train.shape[0])
         for i in range(epochs):
             print("Starting epoch ", i + 1)
-            p = np.random.permutation(X_train.shape[0])
             X_train, y_train = X_train[p], y_train[p]
             flag = True
             j    = -1
@@ -278,12 +372,26 @@ class Network():
                 self.forward()
                 self.backprop()
                 self.update()
-            print("Loss on test set:", self._return_loss(X_test, y_test))
+            # current output
+            training_loss = self.top_layer.loss
+            test_loss = self._return_loss(X_test, y_test)
+            print("Loss on training set: ", round(training_loss, 4))
+            print("Loss on test set:     ", round(test_loss, 4))
+            self.training_loss.append(training_loss)
+            self.test_loss.append(test_loss)
+            # adjust epsilon
+            self.adjust_epsilon(i)
+
 
     def predict(self, X):
         self.set_data(X, y = np.zeros(shape=(X.shape[0], 1)))
         self.forward()
         return self.top_layer.prev.h
 
+    def get_training(self):
+        out_dict = dict()
+        out_dict["Training loss"] = self.training_loss
+        out_dict["Test loss"]     = self.test_loss
+        return out_dict
 
 # python3 feedforward_neuralnet.py

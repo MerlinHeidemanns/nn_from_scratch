@@ -9,14 +9,17 @@ class Module():
         if isinstance(other, Module):
             self.next = other
 
-    def forward(self, y = None):
+    def forward(self, y = None, parameters = None):
         pass
 
     def backward(self):
         pass
 
-    def initialize(self):
+    def initialize(self, optimization, initialization):
         pass
 
     def update(self, parameters = None):
+        pass
+
+    def predict(self):
         pass

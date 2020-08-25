@@ -9,12 +9,17 @@ class LossLayer(Module):
     def show_architecture(self):
         print(self.__class__.__name__)
 
-    def forward(self, y = None):
+    def forward(self, y = None, parameters = None):
         self.y = np.transpose(y)
 
+    def backward(self):
+        pass
 
     def get_accuracy(self, y):
         return(self.forward(y))
+
+    def predict(self):
+        return(self.input)
 
 class MSELossLayer(LossLayer):
 
@@ -22,7 +27,7 @@ class MSELossLayer(LossLayer):
         super().__init__()
         self.y = None
 
-    def forward(self, y):
+    def forward(self, y, parameters = None):
         super().forward(y=y)
         self.loss = np.mean(np.square(self.input - self.y))
         return(self.loss)
@@ -35,7 +40,7 @@ class BCELossLayer(MSELossLayer):
     def __init__(self):
         super().__init__()
 
-    def forward(self, y):
+    def forward(self, y, parameters = None):
         super().forward(y=y)
         self.loss = np.mean(np.where(np.where(self.input > 0.5, 1, 0) != self.y, 1, 0))
         return(self.loss)

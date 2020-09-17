@@ -1,6 +1,7 @@
 from nn_base import *
 import numpy as np
 
+
 class HiddenLayer(Module):
 
     def __init__(self, d):
@@ -19,32 +20,38 @@ class HiddenLayer(Module):
         print(self.__class__.__name__, self.k, self.d)
         self.next.show_architecture()
 
-    def initialize(self, optimization, initialization):
-        self.next.initialize(optimization, initialization)
+    def initialize(self, optimization, initialization, regularization):
+        self.next.initialize(optimization, initialization, regularization)
         self.initialization = initialization
+        self.regularization = regularization
         self.b = np.zeros(shape=(self.d, 1))
         if self.initialization is None:
-            self.w = np.random.normal(loc = 0, scale = 0.2, size = (self.d, self.k))
+            self.w = np.random.normal(loc=0, scale=0.2, size=(self.d, self.k))
         elif self.initialization == "normalized":
-            self.w = np.random.uniform(low=--np.sqrt(6/(self.d + self.k)), high = -np.sqrt(6/(self.d + self.k)), size = (self.d, self.k))
+            self.w = np.random.uniform(low=-np.sqrt(6 / (self.d + self.k)), high=np.sqrt(6 / (self.d + self.k)),
+                                       size=(self.d, self.k))
         self.optimization = optimization
         if self.optimization == "momentum" or self.optimization == "nesterov_momentum":
-            self.v_b = np.zeros(shape = (self.d, 1))
-            self.v_w = np.zeros(shape = (self.d, self.k))
+            self.v_b = np.zeros(shape=(self.d, 1))
+            self.v_w = np.zeros(shape=(self.d, self.k))
         elif self.optimization == "adagrad" or self.optimization == "rmsprop":
-            self.r_b = np.zeros(shape = (self.d, 1))
-            self.r_w = np.zeros(shape = (self.d, self.k))
+            self.r_b = np.zeros(shape=(self.d, 1))
+            self.r_w = np.zeros(shape=(self.d, self.k))
         elif self.optimization == "rmsprop_nesterov":
-            self.v_b = np.zeros(shape = (self.d, 1))
-            self.v_w = np.zeros(shape = (self.d, self.k))
-            self.r_b = np.zeros(shape = (self.d, 1))
-            self.r_w = np.zeros(shape = (self.d, self.k))
+            self.v_b = np.zeros(shape=(self.d, 1))
+            self.v_w = np.zeros(shape=(self.d, self.k))
+            self.r_b = np.zeros(shape=(self.d, 1))
+            self.r_w = np.zeros(shape=(self.d, self.k))
         elif self.optimization == "adam":
-            self.s_b = np.zeros(shape = (self.d, 1))
-            self.s_w = np.zeros(shape = (self.d, self.k))
-            self.r_b = np.zeros(shape = (self.d, 1))
-            self.r_w = np.zeros(shape = (self.d, self.k))
-            self.t   = 0
+            self.s_b = np.zeros(shape=(self.d, 1))
+            self.s_w = np.zeros(shape=(self.d, self.k))
+            self.r_b = np.zeros(shape=(self.d, 1))
+            self.r_w = np.zeros(shape=(self.d, self.k))
+            self.t = 0
+        if self.regularization == "batch_norm":
+            self.beta = np.random.uniform(low = -np.sqrt(2/self.d), high = np.sqrt(2/self.d), size = (self.d, 1))
+            self.gamma = np.random.uniform(low = -np.sqrt(2/self.d), high = np.sqrt(2/self.d), size = (self.d, 1))
+
 
     def _compute_a(self):
         if self.optimization == "nesterov_momentum" or self.optimization == "rmsprop_nesterov":
@@ -57,14 +64,12 @@ class HiddenLayer(Module):
     def _compute_h(self):
         pass
 
-    def forward(self, y = None, parameters = None):
+    def forward(self, y=None, parameters=None):
         self.parameters = parameters
         self._compute_a()
+        self.batch_norm()
         self._compute_h()
-        self.next.forward(y = y, parameters = self.parameters)
-
-
-
+        self.next.forward(y=y, parameters=self.parameters)
 
     def backward(self):
         self.next.backward()
@@ -72,17 +77,24 @@ class HiddenLayer(Module):
     def predict(self):
         self.a = np.add(self.b, np.matmul(self.w, self.input))
         self._compute_h()
-        return(self.next.predict())
+        return (self.next.predict())
 
     def get_accuracy(self, y):
         self.a = np.add(self.b, np.matmul(self.w, self.input))
         self._compute_h()
-        return(self.next.get_accuracy(y))
+        return (self.next.get_accuracy(y))
 
     def compute_update(self):
         self.n = self.input.shape[1]
-        self.b_update = 1/self.n * np.sum(self.delta, axis = 1, keepdims = True)
-        self.w_update = 1/self.n * np.matmul(self.delta, np.transpose(self.input))
+        self.b_update = 1 / self.n * np.sum(self.delta, axis=1, keepdims=True)
+        self.w_update = 1 / self.n * np.matmul(self.delta, np.transpose(self.input))
+
+    def batch_norm(self):
+        self.mu = np.mean(self.a, axis = 1)
+        self.sigma2 = np.mean(np.square(np.transpose(self.a) - self.mu), axis = 0)
+        self.a_transformed = np.transpose(np.divide(np.transpose(self.a) - self.mu, np.sqrt(self.sigma2 + 0.0001) ))
+        self.a_shifted = self.beta + np.multiply(self.gamma, self.a_transformed)
+        print(self.a_shifted.shape)
 
     def update(self):
         self.next.update()
@@ -110,7 +122,7 @@ class HiddenLayer(Module):
         :return: None
         """
         alpha_momentum = self.parameters["alpha_momentum"]
-        epsilon        = self.parameters["epsilon"]
+        epsilon = self.parameters["epsilon"]
         self.v_b = np.subtract(alpha_momentum * self.v_b, epsilon * self.b_update)
         self.v_w = np.subtract(alpha_momentum * self.v_w, epsilon * self.w_update)
         self.b = np.add(self.b, self.v_b)
@@ -118,7 +130,7 @@ class HiddenLayer(Module):
 
     def update_nesterov_momentum(self):
         alpha_momentum = self.parameters["alpha_momentum"]
-        epsilon        = self.parameters["epsilon"]
+        epsilon = self.parameters["epsilon"]
         self.v_b = np.subtract(alpha_momentum * self.v_b, epsilon * self.b_update)
         self.v_w = np.subtract(alpha_momentum * self.v_w, epsilon * self.w_update)
         self.b = np.add(self.b, self.v_b)
@@ -131,8 +143,8 @@ class HiddenLayer(Module):
         self.r_w = np.add(self.r_w, np.square(self.w_update))
         b_update = - np.multiply(np.divide(epsilon, np.add(delta, np.sqrt(self.r_b))), self.b_update)
         w_update = - np.multiply(np.divide(epsilon, np.add(delta, np.sqrt(self.r_w))), self.w_update)
-        self.b   = np.add(self.b, b_update)
-        self.w   = np.add(self.w, w_update)
+        self.b = np.add(self.b, b_update)
+        self.w = np.add(self.w, w_update)
 
     def update_rmsprop(self):
         """
@@ -141,7 +153,7 @@ class HiddenLayer(Module):
         epsilon = learning rate
         """
         delta = pow(10, -6)
-        rho   = self.parameters["rho"]
+        rho = self.parameters["rho"]
         epsilon = self.parameters["epsilon"]
         self.r_b = np.add(rho * self.r_b, (1 - rho) * np.square(self.b_update))
         self.r_w = np.add(rho * self.r_w, (1 - rho) * np.square(self.w_update))
@@ -167,29 +179,29 @@ class HiddenLayer(Module):
         self.w = np.add(self.w, self.v_w)
 
     def update_adam(self):
-        rho1     = self.parameters["rho1"]
-        rho2     = self.parameters["rho2"]
-        epsilon  = self.parameters["epsilon"]
-        t        = self.parameters["t"]
-        delta    = pow(10, -8)
+        rho1 = self.parameters["rho1"]
+        rho2 = self.parameters["rho2"]
+        epsilon = self.parameters["epsilon"]
+        t = self.parameters["t"]
+        delta = pow(10, -8)
         # b
         self.s_b = np.add(rho1 * self.s_b, (1 - rho1) * self.b_update)
         self.r_b = np.add(rho2 * self.r_b, (1 - rho2) * np.square(self.b_update))
-        s_b_hat  = self.s_b / (1 - pow(rho1, t))
-        r_b_hat  = self.r_b / (1 - pow(rho2, t))
-        self.b   = np.add(self.b, - epsilon * np.divide(s_b_hat, np.add(np.sqrt(r_b_hat), delta)))
+        s_b_hat = self.s_b / (1 - pow(rho1, t))
+        r_b_hat = self.r_b / (1 - pow(rho2, t))
+        self.b = np.add(self.b, - epsilon * np.divide(s_b_hat, np.add(np.sqrt(r_b_hat), delta)))
         # w
         self.s_w = np.add(rho1 * self.s_w, (1 - rho1) * self.w_update)
         self.r_w = np.add(rho2 * self.r_w, (1 - rho2) * np.square(self.w_update))
-        s_w_hat  = self.s_w / (1 - pow(rho1, t))
-        r_w_hat  = self.r_w / (1 - pow(rho2, t))
-        self.w   = np.add(self.w, - epsilon * np.divide(s_w_hat, np.add(np.sqrt(r_w_hat), delta)))
+        s_w_hat = self.s_w / (1 - pow(rho1, t))
+        r_w_hat = self.r_w / (1 - pow(rho2, t))
+        self.w = np.add(self.w, - epsilon * np.divide(s_w_hat, np.add(np.sqrt(r_w_hat), delta)))
 
 
 class ReLUHiddenLayer(HiddenLayer):
 
     def __init__(self, d):
-        super().__init__(d = d)
+        super().__init__(d=d)
 
     def _relu(self, x):
         return max([0, x])
@@ -203,16 +215,17 @@ class ReLUHiddenLayer(HiddenLayer):
 
     def backward(self):
         super().backward()
-        self.delta    = np.multiply(self._grelu(self.a), self.next.gradient)
+        self.delta = np.multiply(self._grelu(self.a), self.next.gradient)
         self.gradient = np.matmul(np.transpose(self.w), self.delta)
+
 
 class SigmoidHiddenLayer(HiddenLayer):
 
     def __init__(self, d):
-        super().__init__(d = d)
+        super().__init__(d=d)
 
     def _sigmoid(self, x):
-        return 1/(1 + np.exp(-x))
+        return 1 / (1 + np.exp(-x))
 
     def _gsigmoid(self, x):
         return self._sigmoid(x) * (1 - self._sigmoid(x))
@@ -224,5 +237,5 @@ class SigmoidHiddenLayer(HiddenLayer):
     def backward(self):
         super().backward()
         _vgsigmoid = np.vectorize(self._gsigmoid)
-        self.delta    = np.multiply(_vgsigmoid(self.a), self.next.gradient)
+        self.delta = np.multiply(_vgsigmoid(self.a), self.next.gradient)
         self.gradient = np.matmul(np.transpose(self.w), self.delta)

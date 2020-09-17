@@ -21,9 +21,9 @@ class Network(Module):
     def show_architecture(self):
         self.next.show_architecture()
 
-    def initialize(self, optimization, initialization):
+    def initialize(self, optimization, initialization, regularization):
         self.parameters["t"] = 0
-        self.next.initialize(optimization, initialization)
+        self.next.initialize(optimization, initialization, regularization)
 
     def forward(self, X, y):
         self.next.input = np.transpose(X)
@@ -61,10 +61,11 @@ class Network(Module):
 
     def train(self, X, y, epochs, minibatch, validation = 0.1, parameters = dict(),
               optimization   = "sgd",
-              initialization = None):
+              initialization = None,
+              regularization = None):
         X_train, y_train, X_test, y_test = self.train_test_split(X, y, validation)
         self.parameters = parameters
-        self.initialize(optimization, initialization)
+        self.initialize(optimization, initialization, regularization)
         for i in range(1, 1+ epochs):
             print("Epoch: ", i)
             self.adjust_parameters()

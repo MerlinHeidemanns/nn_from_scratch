@@ -17,10 +17,10 @@ if __name__ == '__main__':
     nn(SigmoidHiddenLayer(1))
     nn(BCELossLayer())
     nn.show_architecture()
-    nn.train(X, y, epochs = 20, minibatch = 1024, validation = 0.2,
-             parameters={"epsilon": 0.05,
+    nn.train(X, y, epochs = 1, minibatch = 1024, validation = 0.2,
+             parameters={"epsilon": 0.0001,
                          "rho1"    : 0.9,
-                         "rho2"    : 0.999},
-             optimization="adam", initialization="normalized")
-    nn.show_error()
-    #print(y)
+                         "rho2"    : 0.99,
+                         "epsilon_adjustment" : 0.9},
+             optimization="adam", initialization="normalized", regularization="batch_norm")
+    #nn.show_error()

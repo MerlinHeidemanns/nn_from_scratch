@@ -15,11 +15,14 @@ class Module():
     def backward(self):
         pass
 
-    def initialize(self, optimization, initialization):
+    def initialize(self, optimization, initialization, regularization):
         pass
 
     def update(self, parameters = None):
         pass
 
     def predict(self):
+        pass
+
+    def show_architecture(self):
         pass

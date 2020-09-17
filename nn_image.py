@@ -20,12 +20,12 @@ if __name__ == '__main__':
     nn(ReLUHiddenLayer(64))
     nn(SigmoidHiddenLayer(1))
     nn(MSELossLayer())
-    nn.train(X1_adj, Y1, epochs=200, minibatch=1024, validation=0.1,
-             parameters={"epsilon": 0.7,
-                         "epsilon_adjustment": 0.95,
-                         "alpha_momentum": 0.5,
-                         "rho": 0.1},
-             optimization="nesterov_momentum", initialization="normalized")
+    nn.train(X1_adj, Y1, epochs=100, minibatch=1024, validation=0.1,
+             parameters={"epsilon": 0.0001,
+                         "rho1": 0.9,
+                         "rho2": 0.99,
+                         "epsilon_adjustment" : 0.9},
+             optimization="adam", initialization="normalized")
     nn.show_error()
     y_hat = nn.predict(X1_adj)
     y_hat = y_hat * 256

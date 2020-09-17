@@ -4,3 +4,10 @@ This project is entirely personal amusement. It resulted from an assignment to c
 work out too well due to a lack of time. I am intending to implement most of the things in Goodfellow et al.'s Deep Learning and then maybe continue with something
 else.
 
+## Log
+
+### September 17th, 2020
+
+* Started BatchNorm implementation, realized that current implementation
+of layers wouldn't work well with it. Have to separate linear and non-linear 
+part and put the gradient descent algorithms maybe in the base module class.

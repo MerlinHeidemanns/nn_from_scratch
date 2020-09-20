@@ -11,3 +11,7 @@ else.
 * Started BatchNorm implementation, realized that current implementation
 of layers wouldn't work well with it. Have to separate linear and non-linear 
 part and put the gradient descent algorithms maybe in the base module class.
+
+### September 19th, 2020
+
+* Added separate activation layer. Batch norm next.

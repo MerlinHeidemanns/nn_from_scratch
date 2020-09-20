@@ -66,7 +66,7 @@ class Network(Module):
         X_train, y_train, X_test, y_test = self.train_test_split(X, y, validation)
         self.parameters = parameters
         self.initialize(optimization, initialization, regularization)
-        for i in range(1, 1+ epochs):
+        for i in range(1, 1 + epochs):
             print("Epoch: ", i)
             self.adjust_parameters()
             j = 0
@@ -79,8 +79,8 @@ class Network(Module):
             test_error     = self.get_accuracy(X_test, y_test)
             self.training_error.append(training_error)
             self.test_error.append(test_error)
-            print("Training loss:", training_error)
-            print("Test loss:    ", test_error)
+            print("Training loss:", np.round(training_error, 4) )
+            print("Test loss:    ", np.round(test_error, 4))
 
     def predict(self, X):
         self.next.input = np.transpose(X)

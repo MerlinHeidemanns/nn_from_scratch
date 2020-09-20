@@ -16,13 +16,14 @@ class Module():
         pass
 
     def initialize(self, optimization, initialization, regularization):
-        pass
+        self.next.initialize(optimization, initialization, regularization)
 
     def update(self, parameters = None):
-        pass
+        self.next.update()
 
     def predict(self):
         pass
 
     def show_architecture(self):
-        pass
+        print(self.__class__.__name__)
+        self.next.show_architecture()

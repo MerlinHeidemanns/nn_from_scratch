@@ -21,6 +21,12 @@ class LossLayer(Module):
     def predict(self):
         return(self.input)
 
+    def initialize(self, optimization, initialization, regularization):
+        pass
+
+    def update(self):
+        pass
+
 class MSELossLayer(LossLayer):
 
     def __init__(self):

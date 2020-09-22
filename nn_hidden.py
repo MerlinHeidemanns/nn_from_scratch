@@ -84,13 +84,6 @@ class HiddenLayer(Module):
         self.b_update = 1 / self.n * np.sum(self.next.gradient, axis=1, keepdims=True)
         self.w_update = 1 / self.n * np.matmul(self.next.gradient, np.transpose(self.input))
 
-    def batch_norm(self):
-        self.mu = np.mean(self.a, axis = 1)
-        self.sigma2 = np.mean(np.square(np.transpose(self.a) - self.mu), axis = 0)
-        self.a_transformed = np.transpose(np.divide(np.transpose(self.a) - self.mu, np.sqrt(self.sigma2 + 0.0001) ))
-        self.a_shifted = self.beta + np.multiply(self.gamma, self.a_transformed)
-        print(self.a_shifted.shape)
-
     def update(self):
         self.next.update()
         self.compute_update()

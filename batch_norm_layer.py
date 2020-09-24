@@ -34,10 +34,15 @@ class BatchNorm(Module):
 
     def backward(self):
         self.next.backward()
+        self.delta_delta = np.sum(np.multiply(self.next.gradient, self.input_transformed),  axis = 0, keepdim = True)
+        self.delta_beta  = np.sum(self.next.gradient, axis = 0, keepdim = True)
+        self.delta_sigma = np.sum(np.multiply(self.next.gradient, self.input - self.mu)
+
+
 
     def predict(self):
         self.next.input = self.input
 
     def update(self, parameters = None):
-        self.beta = self.beta - 1/self.input np.sum(self.next.gradient, axis = 0, keepdim = True)
+        self.beta = self.beta - 1/self.input * np.sum(self.next.gradient, axis = 0, keepdim = True)
 
